@@ -24,6 +24,5 @@ namespace KartongDX.Rendering
             Texture2D.Dispose();
             SRVT.Dispose();
         }
-
     }
 }

@@ -9,14 +9,14 @@ using SharpDX.D3DCompiler;
 
 namespace KartongDX.Resources.Types
 {
-    class MeshResourceDescription : ResourceDescription
+    class MeshResourceDesc : ResourceDesc
     {
         public D3D11.Device Device { get; set; }
 
-        public MeshResourceDescription()
+        public MeshResourceDesc()
             : base() { }
 
-        public MeshResourceDescription(string FileName, string Alias)
+        public MeshResourceDesc(string FileName, string Alias)
             : base(FileName, Alias)
         {
         }
@@ -24,7 +24,7 @@ namespace KartongDX.Resources.Types
 
     class MeshResource : Resource
     {
-        public MeshResource(MeshResourceDescription resourceDescription)
+        public MeshResource(MeshResourceDesc resourceDescription)
             : base(resourceDescription)
         { }
 
@@ -36,9 +36,9 @@ namespace KartongDX.Resources.Types
             PrintDisposeLog();
         }
 
-        protected override void Load(ResourceDescription resourceDescription)
+        protected override void Load(ResourceDesc resourceDescription)
         {
-            MeshResourceDescription desc = (MeshResourceDescription)resourceDescription;
+            MeshResourceDesc desc = (MeshResourceDesc)resourceDescription;
             Mesh = MeshLoader.LoadMesh(resourceDescription.FileName);
         }
     }

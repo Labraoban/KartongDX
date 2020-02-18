@@ -13,9 +13,12 @@ namespace KartongDX.Resources
 		private Dictionary<string, T> data;
 		private Dictionary<string, string> aliases;
 		private string type;
+		private string typeRootPath;
 
-		public ResourceContainer()
+		public ResourceContainer(string typeRootPath)
 		{
+			this.typeRootPath = typeRootPath;
+
 			data = new Dictionary<string, T>();
 			aliases = new Dictionary<string, string>();
 			string fullType = typeof(T).ToString();
@@ -32,8 +35,11 @@ namespace KartongDX.Resources
 			}
 		}
 
-		public void Load(ResourceDescription resourceDescription)
+		public void Load(ResourceDesc resourceDescription)
 		{
+			string fullPath = typeRootPath + resourceDescription.FileName;
+			resourceDescription.FileName = fullPath;
+
 			if (!data.ContainsKey(resourceDescription.FileName))
 			{
 				T resource = (T)Activator.CreateInstance(typeof(T), new object[] { resourceDescription });

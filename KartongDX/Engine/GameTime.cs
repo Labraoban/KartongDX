@@ -9,21 +9,24 @@ namespace KartongDX.Engine
 {
     class GameTime
     {
+        public GameTimeAccessor Accessor { get; private set; }
 
-        public float DeltaTime { get; private set; }
-        public float ScaledDeltaTime { get; private set; }
-        public float TimeScale { get; private set; }
+        private float deltaTime;
+        private float scaledDeltaTime;
+        private float timeScale;
 
-        public float Time { get; private set; }
+        private float time;
 
         private long startup;
         private long lastTime;
 
         public GameTime()
         {
-            DeltaTime = 0.0f;
-            ScaledDeltaTime = 0.0f;
-            TimeScale = 1.0f;
+            Accessor = new GameTimeAccessor(this);
+
+            deltaTime = 0.0f;
+            scaledDeltaTime = 0.0f;
+            timeScale = 1.0f;
             startup = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
         }
 
@@ -31,12 +34,27 @@ namespace KartongDX.Engine
         {
             long currentTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
 
-            this.DeltaTime = (currentTime - lastTime) / 1000.0f;
-            this.ScaledDeltaTime = DeltaTime * TimeScale;
-            this.Time = (currentTime - startup) / 1000.0f;
+            this.deltaTime = (currentTime - lastTime) / 1000.0f;
+            this.scaledDeltaTime = deltaTime * timeScale;
+            this.time = (currentTime - startup) / 1000.0f;
 
             var startTime = Process.GetCurrentProcess().StartTime;
-            lastTime = currentTime;;
+            lastTime = currentTime; ;
+        }
+
+        public class GameTimeAccessor
+        {
+            private GameTime gameTime;
+
+            public float DeltaTime { get { return gameTime.deltaTime; } }
+            public float ScaledDeltaTime { get { return gameTime.scaledDeltaTime; } }
+            public float TimeScale { get { return gameTime.timeScale; } }
+            public float Time { get { return gameTime.time; } }
+
+            public GameTimeAccessor(GameTime gameTime)
+            {
+                this.gameTime = gameTime;
+            }
         }
     }
 }

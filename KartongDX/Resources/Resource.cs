@@ -8,18 +8,16 @@ namespace KartongDX.Resources
 {
 	abstract class Resource : IDisposable
 	{
-		private ResourceDescription resourceDescription;
+		private ResourceDesc resourceDescription;
 
-		public Resource(ResourceDescription resourceDescription)
+		public Resource(ResourceDesc resourceDescription)
 		{
 			Load(resourceDescription);
 			this.resourceDescription = resourceDescription;
 		}
 
 		public abstract void Dispose();
-
-
-		protected abstract void Load(ResourceDescription resourceDescription);
+		protected abstract void Load(ResourceDesc resourceDescription);
 
 		protected void PrintDisposeLog()
 		{

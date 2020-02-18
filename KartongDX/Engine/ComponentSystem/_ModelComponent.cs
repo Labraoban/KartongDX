@@ -6,14 +6,10 @@ using System.Threading.Tasks;
 
 namespace KartongDX.Engine.ComponentSystem
 {
-	class _ModelComponent : Component
+	class _ModelComponent : Component, IDrawable
 	{
 		public Rendering.Model Model { get; set; } //TODO: private set
 
-		public _ModelComponent(int id, GameObject owner) : base(id, owner, false, true) //TODO id
-		{
-
-		}
-
+		public _ModelComponent(int id, GameObject owner) : base(id, owner) { }
 	}
 }

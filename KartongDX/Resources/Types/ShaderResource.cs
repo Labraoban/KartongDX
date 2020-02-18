@@ -9,16 +9,16 @@ using SharpDX.D3DCompiler;
 
 namespace KartongDX.Resources.Types
 {
-    class ShaderResourceDescription : ResourceDescription
+    class ShaderResourceDesc : ResourceDesc
     {
         public D3D11.Device Device { get; set; }
         public List<string> Defines { get; set; }
 
-        public ShaderResourceDescription()
+        public ShaderResourceDesc()
             : base() { }
 
-        public ShaderResourceDescription(string FileName, string Alias, D3D11.Device device, List<string> defines = null)
-            : base(FileName, Alias)
+        public ShaderResourceDesc(string fileName, string alias, D3D11.Device device, List<string> defines = null)
+            : base(fileName, alias)
         {
             Device = device;
             Defines = defines;
@@ -27,7 +27,7 @@ namespace KartongDX.Resources.Types
 
     class ShaderResource : Resource
     {
-        public ShaderResource(ShaderResourceDescription resourceDescription)
+        public ShaderResource(ShaderResourceDesc resourceDescription)
             : base(resourceDescription)
         { }
 
@@ -45,9 +45,9 @@ namespace KartongDX.Resources.Types
             PrintDisposeLog();
         }
 
-        protected override void Load(ResourceDescription resourceDescription)
+        protected override void Load(ResourceDesc resourceDescription)
         {
-            ShaderResourceDescription desc = (ShaderResourceDescription)resourceDescription;
+            ShaderResourceDesc desc = (ShaderResourceDesc)resourceDescription;
 
             string file = System.IO.File.ReadAllText(resourceDescription.FileName);
             InputElements = Rendering.ShaderPreprocessor.Preprocess(file);

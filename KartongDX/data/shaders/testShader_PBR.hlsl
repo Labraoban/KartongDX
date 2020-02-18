@@ -41,7 +41,9 @@ VS_Output vs_main(const VS_Input input)
 	output.color = input.color;
 	output.uv = input.uv;
 	output.N = normalize(mul(input.normal.xyz, (float3x3)NormalMatrix));
-	output.T = mul(normalize(input.tangent.xyz - input.normal.xyz * dot(input.normal.xyz, input.tangent.xyz)), (float3x3)NormalMatrix);
+	output.T = mul(
+		normalize(input.tangent.xyz - input.normal.xyz * dot(input.normal.xyz, input.tangent.xyz)), 
+		(float3x3)NormalMatrix);
 	output.B = normalize(cross(output.N, output.T));
 
 	output.TBN = float3x3(
@@ -94,7 +96,7 @@ float geometry(float NdotL, float NdotV, float roughness)
 
 float4 ps_main(const VS_Output input) : SV_TARGET
 {
-	float3 albedo = 1.0f; //_Diffuse.Sample(Sampler, input.uv).rgb;
+	float3 albedo = _Diffuse.Sample(Sampler, input.uv).rgb;
 	float roughness = _Roughness.Sample(Sampler, input.uv).r;
 	float metallic = _Metallic.Sample(Sampler, input.uv).r;
 	float3 normal = normalize((2.0f * _Normal.Sample(Sampler, input.uv).xyz) - 1.0f);
@@ -117,7 +119,7 @@ float4 ps_main(const VS_Output input) : SV_TARGET
 	float3 sky = Sky.Sample(Sampler, lightRef).rgba;
 	float3 irr = Irradiance.Sample(Sampler, lightRef).rgba;
 
-	//return float4(sky.rgb, 1.0f);
+	//return float4(irr.rgb, 1.0f);
 
 	float3 halfDir = normalize(lightDir + viewDir);
 
@@ -169,3 +171,4 @@ float4 ps_main(const VS_Output input) : SV_TARGET
 	//final.b += 1;
 	return float4(final, 1.0f);
 }
+

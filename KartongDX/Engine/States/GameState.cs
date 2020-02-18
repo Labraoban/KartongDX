@@ -11,15 +11,19 @@ namespace KartongDX.Engine.States
     abstract class GameState
     {
         public string Name { get; private set; }
+        protected Accessors Accessors { get; private set; }
 
         protected Scene stateScene;
         protected Scene uiScene;
 
-        public GameState(string name)
+        public GameState(string name, Accessors accessors)
         {
             this.Name = name;
-            stateScene = new Scene();
-            uiScene = new Scene();
+            this.Accessors = accessors;
+            stateScene = new Scene(accessors);
+            uiScene = new Scene(accessors);
+
+            CreateCamera();
         }
 
         public void Load(Resources.ResourceManager resourceManager, SharpDX.Direct3D11.Device device)
@@ -33,10 +37,10 @@ namespace KartongDX.Engine.States
 
         public abstract void Init(ResourceManager resourceManager);
 
-        public virtual void Update(GameTime gameTime)
+        public virtual void Update()
         {
-            stateScene.Update(gameTime);
-            uiScene.Update(gameTime);
+            stateScene.Update();
+            uiScene.Update();
         }
 
         public virtual void Draw(Rendering.RenderQueue renderQueue)
@@ -52,6 +56,11 @@ namespace KartongDX.Engine.States
         public Scene GetScene()
         {
             return stateScene;
+        }
+
+        protected virtual void CreateCamera()
+        {
+            stateScene.SetCamera(new Rendering.Camera(0, 0, Rendering.Window.Width, Rendering.Window.Height, 60));
         }
     }
 }

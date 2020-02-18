@@ -78,16 +78,23 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Engine\Accessors.cs" />
     <Compile Include="Engine\ApplicationSettings.cs" />
+    <Compile Include="Engine\ComponentSystem\IDrawable.cs" />
+    <Compile Include="Engine\ComponentSystem\IUpdatable.cs" />
+    <Compile Include="Engine\ComponentSystem\_FPSCameraComponent.cs" />
     <Compile Include="Rendering\CubemapRenderer.cs" />
+    <Compile Include="Rendering\DeviceResources.cs" />
     <Compile Include="Rendering\PostProcessing\PostEffect.cs" />
     <Compile Include="Rendering\PostProcessing\PostEffectHandler.cs" />
     <Compile Include="Rendering\RenderController.cs" />
     <Compile Include="Rendering\RenderMode.cs" />
+    <Compile Include="Rendering\RenderTargetHandler.cs" />
     <Compile Include="Rendering\Skybox.cs" />
     <Compile Include="Rendering\Texture.cs" />
     <Compile Include="Resources\IniHandler.cs" />
     <Compile Include="Resources\Types\Texture2DResource.cs" />
+    <Compile Include="Resources\Utility\HDRFileLoader.cs" />
     <Content Include="data\shaders\KDX_EFFECTS\KDX_DEPTH.hlsl">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
@@ -127,7 +134,6 @@
     <Compile Include="Engine\ComponentSystem\Component.cs" />
     <Compile Include="Engine\ComponentSystem\Components.cs" />
     <Compile Include="Engine\ComponentSystem\_ModelComponent.cs" />
-    <Compile Include="Engine\Drawable.cs" />
     <Compile Include="Engine\GameObject.cs" />
     <Compile Include="Engine\Input.cs" />
     <Compile Include="Engine\Scene.cs" />
@@ -138,7 +144,7 @@
     <Compile Include="Logger.cs" />
     <Compile Include="Rendering\Material.cs" />
     <Compile Include="Rendering\RenderQueue.cs" />
-    <Compile Include="Rendering\ResourceViews\ResourceViewPBR.cs" />
+    <Compile Include="Rendering\ResourceViews\ShaderResourceViewCollection.cs" />
     <Compile Include="Rendering\ShaderPreprocessor.cs" />
     <Compile Include="Rendering\UI\UIRect.cs" />
     <Compile Include="Rendering\Window.cs" />
@@ -146,14 +152,14 @@
     <Compile Include="Resources\Loaders\MeshLoader.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Engine\Game.cs" />
+    <Compile Include="Engine\GameEngine.cs" />
     <Compile Include="Rendering\Camera.cs" />
     <Compile Include="Rendering\Mesh.cs" />
     <Compile Include="Rendering\Model.cs" />
     <Compile Include="Rendering\Renderer.cs" />
     <Compile Include="Rendering\Shader.cs" />
     <Compile Include="Resources\Resource.cs" />
-    <Compile Include="Resources\ResourceDescription.cs" />
+    <Compile Include="Resources\ResourceDesc.cs" />
     <Compile Include="Resources\ResourceManager.cs" />
     <Compile Include="Resources\Types\MeshResource.cs" />
     <Compile Include="Resources\Types\ShaderResource.cs" />
@@ -169,10 +175,34 @@
     <Content Include="data\shaders\segments\per_object_buffer.hlsl">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="data\textures\hdri.jpg">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="data\textures\cube.jpg">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="data\textures\hdri.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="data\textures\plain_normal.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="data\textures\sky\fireplace_4k.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="data\textures\sky\hdri.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="data\textures\sky\misty_pines_4k.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="data\textures\sky\noon_grass_4k.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="data\textures\sky\output_sky.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="data\textures\StandardCubeMap.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="data\textures\test\RedOctFloor_basecolor.png">
@@ -223,6 +253,15 @@
     <None Include="data\models\sphere_smooth.fbx">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="data\textures\hdrtest.hdr">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="data\textures\sky\fireplace_4k.hdr" />
+    <None Include="data\textures\sky\misty_pines_4k.hdr" />
+    <None Include="data\textures\sky\noon_grass_4k.hdr" />
+    <None Include="data\textures\studio_small_05_4k.hdr">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="packages.config" />
     <Content Include="data\models\plane.fbx">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
@@ -231,10 +270,15 @@
   <ItemGroup>
     <Compile Include="Rendering\Triangle.cs" />
     <Compile Include="Rendering\Vertex.cs" />
+    <Content Include="data\textures\UV_Grid_Sm.jpg">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="data\textures\UV_Grid_Sm.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Resources\Collection\" />
-    <Folder Include="Resources\Utility\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="..\packages\AssimpNet.4.1.0\build\AssimpNet.targets" Condition="Exists('..\packages\AssimpNet.4.1.0\build\AssimpNet.targets')" />

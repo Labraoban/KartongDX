@@ -8,9 +8,7 @@ using SharpDX.DXGI;
 
 using D3D11 = SharpDX.Direct3D11;
 using SharpDX.Direct3D;
-using SharpDX.D3DCompiler;
 
-using KartongDX.Rendering.ResourceViews;
 using KartongDX.Engine;
 
 namespace KartongDX.Rendering
@@ -21,20 +19,16 @@ namespace KartongDX.Rendering
         public const int SKYBOX_IRR_SLOT = 33;
         public const int SKYBOX_RAD_SLOT = 34;
         public const int SKYBOX_BRDF_SLOT = 35;
-
-        public RenderController RenderController { get; private set; }
-
+        
         public int RenderRes_X { get; private set; }
         public int RenderRes_Y { get; private set; }
         public int TargetFPS { get; private set; }
 
-        public D3D11.Device Device { get; private set; }
-
+        private DeviceResources deviceResources;
         private Window window;
 
-        private SwapChain swapChain;
 
-        private D3D11.DeviceContext deviceContext;
+
         private D3D11.SamplerState sampler;
 
         private D3D11.Buffer perObjectConstantShaderBuffer;
@@ -44,58 +38,34 @@ namespace KartongDX.Rendering
         private PerObjectBuffer perObjectBuffer;
         public PerFrameBuffer perFrameBuffer;
 
-        private Camera camera;
+        //private Camera camera;
 
         private Action gameLoopCallback;
 
         private SampleDescription sampleDescription = new SampleDescription(1, 0);
 
-        private RenderMode renderMode;
+        //private RenderMode renderMode;
 
         private List<Scene> scenes;
 
-        private D3D11.Texture2D backBuffer;
-        private D3D11.RenderTargetView backBufferRTV;
-
         PostProcessing.PostEffectHandler effectHandler;
+        RenderTargetHandler renderTargetHandler;
 
-        Shader copyToBackShader; // TODO temp
-
-        public Renderer(Window window, int renderRes_X, int renderRes_Y, int targetFPS, PostProcessing.PostEffectHandler effectHandler)
+        public Renderer(Window window, DeviceResources deviceResources, int renderRes_X, int renderRes_Y, int targetFPS, PostProcessing.PostEffectHandler effectHandler)
         {
             this.window = window;
+            this.deviceResources = deviceResources;
             this.RenderRes_X = renderRes_X;
             this.RenderRes_Y = renderRes_Y;
             this.TargetFPS = targetFPS;
             this.effectHandler = effectHandler;
 
-            Device = new D3D11.Device(DriverType.Hardware, D3D11.DeviceCreationFlags.Debug | D3D11.DeviceCreationFlags.DisableGpuTimeout);
-            deviceContext = Device.ImmediateContext;
-            renderMode = new RenderMode("Game");
-            renderMode.UseSwapChain = true;
+            renderTargetHandler = new RenderTargetHandler();
 
+            InitRenderTargets();
+            SetupConstantBuffers();
 
-            var backBufferDesc = new ModeDescription(RenderRes_X, RenderRes_Y, new Rational(TargetFPS, 1), Format.R8G8B8A8_UNorm);
-            var swapChainDesc = new SwapChainDescription()
-            {
-                ModeDescription = backBufferDesc,
-                SampleDescription = sampleDescription,
-                Usage = Usage.RenderTargetOutput,
-                BufferCount = 1,
-                OutputHandle = window.GetHandle(),
-                IsWindowed = true
-            };
-
-            // Create SwapChain
-            Factory factory = new Factory1();
-            swapChain = new SwapChain(factory, Device, swapChainDesc);
-
-            // Create BackBuffer RTV
-            backBuffer = swapChain.GetBackBuffer<D3D11.Texture2D>(0);
-            backBufferRTV = new D3D11.RenderTargetView(Device, backBuffer);
-
-            SetupRenderMode(renderMode);
-            InitRenderMode(renderMode);
+            Logger.Write(LogType.Info, "Renderer Created!");
         }
 
         public void StartRenderLoop()
@@ -106,19 +76,79 @@ namespace KartongDX.Rendering
                 DrawScenes();
                 PostProcess();
 
-                if (renderMode.UseSwapChain)
-                {
-                    swapChain.Present(1, PresentFlags.None);
-                }
+                deviceResources.SwapChain.Present(1, PresentFlags.None);
             });
         }
 
-        public void Init()
+        /* Clears RenderTarget and DepthStencil then renders all staged scenes.
+         * Finally, render skybox last.
+         */
+        private void DrawScenes()
         {
-            EnableRenderMode(renderMode);
+            ClearDepth(renderTargetHandler.GetDepthStencilView());
+            ClearRTV(renderTargetHandler.GetRenderTargetView());
 
-            // TODO temp
-            copyToBackShader = Resources.ResourceManager.instance.Shaders.GetFromAlias("KDX_COPY_TO_BACK").Shader;
+            //camera.ResolveDirty();
+            //UpdatePerFrameBuffer();
+
+            // Always use first skybox if several scenes contrain skyboxes;
+            // Skybox is drawn with camera from its scene.
+            Skybox skybox = scenes[0].Skybox;
+            Camera skyCam = scenes[0].Camera;
+            SetSkyboxSRVT(skybox);
+
+            foreach (Scene scene in scenes)
+            {
+                DrawScene(scene);
+            }
+
+            // Render Skybox last
+            UpdatePerObjectBuffer(Matrix.Identity, skyCam);
+            Render(skybox.model);
+        }
+
+        /* Calls the Render method for each object in RenderQueue
+         */
+        private void DrawScene(Scene scene)
+        {
+            Camera camera = scene.Camera;
+            RenderQueue queue = scene.GetRenderQueue();
+
+
+            //camera.ResolveDirty();
+            UpdatePerFrameBuffer(camera); // Should be named PerSceneBuffer now.
+            deviceResources.DeviceContext.Rasterizer.SetViewport(camera.Viewport);
+
+            foreach (RenderItem renderItem in queue.GetList())
+            {
+                UpdatePerObjectBuffer(renderItem.WorldTransform, camera);
+
+                Render(renderItem.Model);
+            }
+        }
+
+        private void Render(Model model)
+        {
+            D3D11.DeviceContext deviceContext = deviceResources.DeviceContext;
+
+            if (!model.Mesh.HasBuffers)
+            {
+                // TODO: Should not initialize one buffer per object
+                //       Investigate way to "pool" meshes in.
+                //       Also, should not be done here.
+                model.Mesh.CreateBuffers(deviceResources.Device);
+            }
+
+            D3D11.Buffer vertexBuffer = model.Mesh.VertexBuffer;
+            D3D11.Buffer indexBuffer = model.Mesh.IndexBuffer;
+
+            SetShader(model.Material.Shader);
+            SetMaterialSRVT(model.Material);
+
+            deviceContext.InputAssembler.SetVertexBuffers(0, new D3D11.VertexBufferBinding(vertexBuffer, Utilities.SizeOf<Vertex>(), 0));
+            deviceContext.InputAssembler.SetIndexBuffer(indexBuffer, Format.R32_UInt, 0);
+
+            deviceContext.DrawIndexed(model.Mesh.Triangles.Count() * 3, 0, 0);
         }
 
         public void PostProcess()
@@ -126,50 +156,41 @@ namespace KartongDX.Rendering
             int numberOfEffects = effectHandler.NumberOfEffects;
             if(numberOfEffects < 1)
             {
-                // TODO: Fallback
-                Logger.Write(LogType.Error, "No post effects, cant copy to backbuffer");
+                // TODO: Implement some fallback
+                Logger.Write(LogType.Error, "No post effects, Can not copy to backbuffer");
             }
-
-            RenderViews r0 = renderMode.RenderViews;
-            RenderViews r1 = renderMode.RenderViewsSwap;
-
-            // Backbuffer does not use depth
-            RenderViews b0 = new RenderViews(backBufferRTV, null); 
-
-            RenderViews[] views =
-            {
-                r0,
-                r1
-            };
-
-            int targetIndex = 0;
-
-            RenderViews target;
-            RenderViews source;
 
             for (int i = 0; i < effectHandler.NumberOfEffects; ++i)
             {
+                D3D11.ShaderResourceView sourceRenderTarget = renderTargetHandler.GetRenderTargetResourceView();
+                D3D11.ShaderResourceView sourceDepthStencil = renderTargetHandler.GetDepthStencilResourceView();
+                D3D11.RenderTargetView destRenderTarget;
+                
                 // Only One effect Left, use Backbuffer
                 if (i == effectHandler.NumberOfEffects - 1)
                 {
-                    source = views[targetIndex];
-                    target = b0; // set target to backbuffer
+                    destRenderTarget = deviceResources.BackBufferRTV;
                 }
                 else
                 {
-                    source = views[targetIndex];
-                    targetIndex = (targetIndex + 1) % 2;
-                    target = views[targetIndex];
+                    destRenderTarget = renderTargetHandler.GetRenderTargetView();
                 }
 
-                ApplyPostEffect(source, target, effectHandler.GetEffectFromStack(i));
+                ApplyPostEffect(sourceRenderTarget, sourceDepthStencil, destRenderTarget, effectHandler.GetEffectFromStack(i));
+                renderTargetHandler.Swap();
             }
+            renderTargetHandler.ResetToDefault();
         }
 
-        public void ApplyPostEffect(RenderViews source, RenderViews target, PostProcessing.PostEffect effect)
+        public void ApplyPostEffect(
+            D3D11.ShaderResourceView sourceRenderTarget,
+            D3D11.ShaderResourceView sourceDepthStencil,
+            D3D11.RenderTargetView destRenderTarget, 
+            PostProcessing.PostEffect effect)
         {
-            deviceContext.OutputMerger.SetRenderTargets(null, target.RTV);
-
+            D3D11.DeviceContext deviceContext = deviceResources.DeviceContext;
+            // No rendering directly to DepthStencil
+            deviceContext.OutputMerger.SetRenderTargets(null, destRenderTarget);
 
             deviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleStrip;
             deviceContext.InputAssembler.InputLayout = effect.Shader.InputLayout;
@@ -177,29 +198,31 @@ namespace KartongDX.Rendering
             deviceContext.VertexShader.Set(effect.Shader.VertexShader);
             deviceContext.PixelShader.Set(effect.Shader.PixelShader);
 
-            deviceContext.PixelShader.SetShaderResource(0, source.RTV_SRVT);
-            deviceContext.PixelShader.SetShaderResource(1, source.DSV_SRVT);
+            deviceContext.PixelShader.SetShaderResource(0, sourceRenderTarget);
+            deviceContext.PixelShader.SetShaderResource(1, sourceDepthStencil);
 
             deviceContext.PixelShader.SetSampler(0, sampler);
 
             deviceContext.Draw(4, 0);
 
             // Reset
-            deviceContext.OutputMerger.SetRenderTargets(renderMode.RenderViews.DSV, renderMode.RenderViews.RTV);
+            deviceContext.OutputMerger.SetRenderTargets(
+                renderTargetHandler.GetDepthStencilView(), 
+                renderTargetHandler.GetRenderTargetView()
+            );
         }
 
-
-        public void SetupRenderMode(RenderMode renderMode)
+        public void InitRenderTargets()
         {
-            Logger.Write(LogType.Info, "Setup RenderMode {0}", renderMode.Name);
+            D3D11.DeviceContext deviceContext = deviceResources.DeviceContext;
 
-            renderMode.RenderTargetDesc = new D3D11.Texture2DDescription()
+            var renderTargetDesc = new D3D11.Texture2DDescription()
             {
-                Format = /* Format.R8G8B8A8_UNorm */ Format.R16G16B16A16_Float,
+                Format = Format.R16G16B16A16_Float,
                 ArraySize = 1,
                 MipLevels = 1,
-                Width = RenderRes_X,
-                Height = RenderRes_Y,
+                Width = deviceResources.BackBuffer.Description.Width,
+                Height = deviceResources.BackBuffer.Description.Height,
                 SampleDescription = sampleDescription,
                 Usage = D3D11.ResourceUsage.Default,
                 BindFlags = D3D11.BindFlags.RenderTarget | D3D11.BindFlags.ShaderResource,
@@ -207,13 +230,13 @@ namespace KartongDX.Rendering
                 OptionFlags = D3D11.ResourceOptionFlags.None
             };
 
-            renderMode.DepthBufferDesc = new D3D11.Texture2DDescription()
+            var depthStencilDesc = new D3D11.Texture2DDescription()
             {
                 Format = Format.R24G8_Typeless,
                 ArraySize = 1,
                 MipLevels = 1,
-                Width = RenderRes_X,
-                Height = RenderRes_Y,
+                Width = deviceResources.BackBuffer.Description.Width,
+                Height = deviceResources.BackBuffer.Description.Height,
                 SampleDescription = sampleDescription,
                 Usage = D3D11.ResourceUsage.Default,
                 BindFlags = D3D11.BindFlags.DepthStencil | D3D11.BindFlags.ShaderResource,
@@ -221,80 +244,63 @@ namespace KartongDX.Rendering
                 OptionFlags = D3D11.ResourceOptionFlags.None
             };
 
-            renderMode.DepthStencilStateDesc = new D3D11.DepthStencilStateDescription
+            var depthStencilStateDesc = new D3D11.DepthStencilStateDescription
             {
                 IsDepthEnabled = true,
                 DepthComparison = D3D11.Comparison.LessEqual,
-                DepthWriteMask = D3D11.DepthWriteMask.All
+                DepthWriteMask = D3D11.DepthWriteMask.All,
             };
-        }
 
-        public void InitRenderMode(RenderMode renderMode)
-        {
-            Logger.Write(LogType.Info, "Init RenderMode {0}", renderMode.Name);
 
-            // Create RenderTarget Textures
-            renderMode.RenderTarget = new D3D11.Texture2D(Device, renderMode.RenderTargetDesc);
-            renderMode.DepthBuffer = new D3D11.Texture2D(Device, renderMode.DepthBufferDesc);
-
-            // Create Swap RenderTargetTextures for PostPorcessing
-            renderMode.RenderTargetSwap = new D3D11.Texture2D(Device, renderMode.RenderTargetDesc);
-            renderMode.DepthBufferSwap = new D3D11.Texture2D(Device, renderMode.DepthBufferDesc);
-
+            // Create Descripptions for DepthStencil
+            // RenderTarget works without Desc
             D3D11.DepthStencilViewDescription dsvDesc = new D3D11.DepthStencilViewDescription();
             dsvDesc.Format = Format.D24_UNorm_S8_UInt;
             dsvDesc.Dimension = D3D11.DepthStencilViewDimension.Texture2D;
             dsvDesc.Texture2D.MipSlice = 0;
             dsvDesc.Flags = 0;
 
-            D3D11.RenderTargetViewDescription rtvDesc = new D3D11.RenderTargetViewDescription();
-            rtvDesc.Format = Format.R16G16B16A16_Float;
-            rtvDesc.Dimension = D3D11.RenderTargetViewDimension.Texture2D;
-            rtvDesc.Texture2D.MipSlice = 0;
+            D3D11.ShaderResourceViewDescription dsSrvtDesc = new D3D11.ShaderResourceViewDescription();
+            dsSrvtDesc.Texture2D.MipLevels = 1;
+            dsSrvtDesc.Dimension = ShaderResourceViewDimension.Texture2D;
+            dsSrvtDesc.Format = Format.R24_UNorm_X8_Typeless; // TODO: Check Format
 
-            D3D11.ShaderResourceViewDescription dsvStvtDesc = new D3D11.ShaderResourceViewDescription();
-            dsvStvtDesc.Texture2D.MipLevels = 1;
-            dsvStvtDesc.Dimension = ShaderResourceViewDimension.Texture2D;
-            dsvStvtDesc.Format = Format.R24_UNorm_X8_Typeless;
 
-            D3D11.ShaderResourceViewDescription rtvSrtvDesc = new D3D11.ShaderResourceViewDescription();
-            rtvSrtvDesc.Texture2D.MipLevels = 1;
-            rtvSrtvDesc.Dimension = ShaderResourceViewDimension.Texture2D;
-            rtvSrtvDesc.Format = Format.R16G16B16A16_Float;
+            // Create RenderTarget Textures
+            renderTargetHandler.CreateRenderTarget(deviceResources.Device, renderTargetDesc);
+            renderTargetHandler.CreateDepthStencil(deviceResources.Device, depthStencilDesc, dsvDesc, dsSrvtDesc);
 
-            //Create Views
-            renderMode.RenderViews = new RenderViews(
-                new D3D11.RenderTargetView(Device, renderMode.RenderTarget),
-                new D3D11.DepthStencilView(Device, renderMode.DepthBuffer, dsvDesc),
-                new D3D11.ShaderResourceView(Device, renderMode.RenderTarget),
-                new D3D11.ShaderResourceView(Device, renderMode.DepthBuffer, dsvStvtDesc)
+
+            deviceContext.OutputMerger.SetRenderTargets(
+                renderTargetHandler.GetDepthStencilView(),
+                renderTargetHandler.GetRenderTargetView()
             );
 
-            //Create Views for Swap
-            renderMode.RenderViewsSwap = new RenderViews(
-                new D3D11.RenderTargetView(Device, renderMode.RenderTargetSwap, rtvDesc),
-                new D3D11.DepthStencilView(Device, renderMode.DepthBufferSwap, dsvDesc),
-                new D3D11.ShaderResourceView(Device, renderMode.RenderTargetSwap, rtvSrtvDesc),
-                new D3D11.ShaderResourceView(Device, renderMode.DepthBufferSwap, dsvStvtDesc)
-            );
 
 
             // Create DepthStencilState
-            renderMode.DepthStencilState = new D3D11.DepthStencilState(Device, renderMode.DepthStencilStateDesc);
+            var depthStencilState = new D3D11.DepthStencilState(deviceResources.Device, depthStencilStateDesc);
+            deviceContext.OutputMerger.SetDepthStencilState(depthStencilState);
 
             // Create Sampler
             sampler = CreateSampler();
+            deviceContext.VertexShader.SetSampler(0, sampler);
+            deviceContext.PixelShader.SetSampler(0, sampler);
 
-            //deviceContext.OutputMerger.SetRenderTargets(depthStencilView, renderTargetView);
             deviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
 
-            perObjectConstantShaderBuffer = new SharpDX.Direct3D11.Buffer(Device, SharpDX.Utilities.SizeOf<PerObjectBuffer>(),
+            Logger.Write(LogType.Info, "Renderer Created");
+        }
+
+        private void SetupConstantBuffers()
+        {
+            perObjectConstantShaderBuffer = new D3D11.Buffer(deviceResources.Device, SharpDX.Utilities.SizeOf<PerObjectBuffer>(),
                 D3D11.ResourceUsage.Default,
                 D3D11.BindFlags.ConstantBuffer,
                 D3D11.CpuAccessFlags.None,
                 D3D11.ResourceOptionFlags.None, 0);
 
-            perFrameConstantShaderBuffer = new SharpDX.Direct3D11.Buffer(Device, SharpDX.Utilities.SizeOf<PerFrameBuffer>(),
+            perFrameConstantShaderBuffer = new D3D11.Buffer(deviceResources.Device, SharpDX.Utilities.SizeOf<PerFrameBuffer>(),
                 D3D11.ResourceUsage.Default,
                 D3D11.BindFlags.ConstantBuffer,
                 D3D11.CpuAccessFlags.None,
@@ -302,26 +308,14 @@ namespace KartongDX.Rendering
 
             perObjectBuffer = new PerObjectBuffer();
             perFrameBuffer = new PerFrameBuffer();
-
-            Logger.Write(LogType.Info, "Renderer Created");
-        }
-
-        public void EnableRenderMode(RenderMode renderMode)
-        {
-            Logger.Write(LogType.Info, "Enable RenderMode {0}", renderMode.Name);
-
-            deviceContext.OutputMerger.SetDepthStencilState(renderMode.DepthStencilState);
-            deviceContext.OutputMerger.SetRenderTargets(renderMode.RenderViews.DSV, renderMode.RenderViews.RTV);
-
-            if (camera != null)
-                deviceContext.Rasterizer.SetViewport(camera.Viewport);
-            deviceContext.VertexShader.SetSampler(0, sampler);
         }
 
         /* Sets shader for rendering of current object
          */
         public void SetShader(Shader shader)
         {
+            D3D11.DeviceContext deviceContext = deviceResources.DeviceContext;
+
             deviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
             deviceContext.InputAssembler.InputLayout = shader.InputLayout;
 
@@ -341,92 +335,27 @@ namespace KartongDX.Rendering
         {
             foreach (var slot in material.Slots)
             {
-                deviceContext.PixelShader.SetShaderResource(slot, material.GetTexture(slot).SRVT);
+                deviceResources.DeviceContext.PixelShader.SetShaderResource(slot, material.GetTexture(slot).SRVT);
             }
         }
 
         public void SetSkyboxSRVT(Skybox skybox)
         {
+            D3D11.DeviceContext deviceContext = deviceResources.DeviceContext;
+
             deviceContext.PixelShader.SetShaderResource(SKYBOX_ENV_SLOT, skybox.Cubemap.Enviroment.SRVT);
             deviceContext.PixelShader.SetShaderResource(SKYBOX_IRR_SLOT, skybox.Cubemap.Irradiance.SRVT);
         }
 
-        public void SetCamera(Camera camera)
+        private void UpdatePerFrameBuffer(Camera camera)
         {
-            this.camera = camera;
-            deviceContext.Rasterizer.SetViewport(camera.Viewport);
-        }
+            // TODO: Scene lights should be passed here and added to constant buffer 
 
-        private void DrawScenes()
-        {
-            //if (renderMode.UseDepthStencil)
-            ClearDepth(renderMode.RenderViews.DSV);
-            ClearRTV(renderMode.RenderViews.RTV);
-
-            camera.ResolveDirty();
-            UpdatePerFrameBuffer();
-
-            Skybox skybox = scenes[0].Skybox;
-
-            SetSkyboxSRVT(skybox);
-
-            foreach (Scene scene in scenes)
-            {
-                DrawScene(scene, camera);
-            }
-
-            // Render Skybox last
-            UpdatePerObjectBuffer(Matrix.Identity, camera);
-            Render(skybox.model);
-        }
-
-        private void DrawScene(Scene scene, Camera cam)
-        {
-            RenderQueue queue = scene.GetRenderQueue();
-
-            foreach (RenderItem renderItem in queue.GetList())
-            {
-                UpdatePerObjectBuffer(renderItem.WorldTransform, cam);
-                Render(renderItem.Model);
-            }
-        }
-
-        public void StageScenes(List<Scene> scenes)
-        {
-            this.scenes = scenes;
-        }
-
-
-        private void Render(Model model)
-        {
-            if (!model.Mesh.HasBuffers)
-            {
-                model.Mesh.CreateBuffers(Device);
-            }
-
-            D3D11.Buffer vertexBuffer = model.Mesh.VertexBuffer;
-            D3D11.Buffer indexBuffer = model.Mesh.IndexBuffer;
-
-            SetShader(model.Material.Shader);
-            SetMaterialSRVT(model.Material);
-
-            deviceContext.InputAssembler.SetVertexBuffers(0, new D3D11.VertexBufferBinding(vertexBuffer, Utilities.SizeOf<Vertex>(), 0));
-            deviceContext.InputAssembler.SetIndexBuffer(indexBuffer, Format.R32_UInt, 0);
-
-            deviceContext.DrawIndexed(model.Mesh.Triangles.Count() * 3, 0, 0);
-        }
-
-        private void UpdatePerFrameBuffer()
-        {
-
-            //shaderLightConstant.lightDir = new Vector3(1, 0, 0);
-            //shaderLightConstant.lightDir.Normalize(); // TODO This is temp recplaced by public ShaderLightConstand
-
-            perFrameBuffer.viewPosition = camera.GetPosition();
+            perFrameBuffer.viewPosition = camera.GetWorldPosition();
             perFrameBuffer.viewDir = camera.WorldMatrix.Forward;
             perFrameBuffer.zFar = camera.ZFar;
 
-            deviceContext.UpdateSubresource(ref perFrameBuffer, perFrameConstantShaderBuffer);
+            deviceResources.DeviceContext.UpdateSubresource(ref perFrameBuffer, perFrameConstantShaderBuffer);
         }
 
         private void UpdatePerObjectBuffer(Matrix modelMatrix, Camera cam)
@@ -446,13 +375,12 @@ namespace KartongDX.Rendering
             perObjectBuffer.normalMatrix = Matrix.Invert(Matrix.Transpose(world));
             perObjectBuffer.invProj = Matrix.Invert(proj);
 
-            deviceContext.UpdateSubresource(ref perObjectBuffer, perObjectConstantShaderBuffer);
+            deviceResources.DeviceContext.UpdateSubresource(ref perObjectBuffer, perObjectConstantShaderBuffer);
         }
 
-        public void Dispose()
+        public void StageScenes(List<Scene> scenes)
         {
-            renderMode.Dispose();
-            Device.Dispose();
+            this.scenes = scenes;
         }
 
         public void SetEngineLoopCallback(Action gameLoopCallback)
@@ -462,7 +390,7 @@ namespace KartongDX.Rendering
 
         private D3D11.SamplerState CreateSampler()
         {
-            return new D3D11.SamplerState(Device, new D3D11.SamplerStateDescription()
+            return new D3D11.SamplerState(deviceResources.Device, new D3D11.SamplerStateDescription()
             {
                 Filter = D3D11.Filter.MinMagMipLinear,
                 AddressU = D3D11.TextureAddressMode.Wrap,
@@ -479,13 +407,18 @@ namespace KartongDX.Rendering
 
         private void ClearDepth(D3D11.DepthStencilView depthStencilView)
         {
-            deviceContext.ClearDepthStencilView(depthStencilView, D3D11.DepthStencilClearFlags.Depth, 1.0f, 0);
+            deviceResources.DeviceContext.ClearDepthStencilView(depthStencilView, D3D11.DepthStencilClearFlags.Depth, 1.0f, 0);
+            //deviceResources.DeviceContext.ClearDepthStencilView(depthStencilView, D3D11.DepthStencilClearFlags.Stencil, 1.0f, 0);
         }
 
         private void ClearRTV(D3D11.RenderTargetView renderTargetView)
         {
-            deviceContext.ClearRenderTargetView(renderTargetView, new SharpDX.Color(32, 103, 178));
+            deviceResources.DeviceContext.ClearRenderTargetView(renderTargetView, new SharpDX.Color(32, 103, 178));
         }
 
+        public void Dispose()
+        {
+            renderTargetHandler.Dispose();
+        }
     }
 }

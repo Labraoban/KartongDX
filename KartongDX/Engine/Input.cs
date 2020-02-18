@@ -10,7 +10,7 @@ namespace KartongDX.Engine
 {
     class Input
     {
-        public static Input instance; //Remove this
+        public InputAcessor Acessor { get; private set; }
 
         private DirectInput directInput;
         private Keyboard keyboard;
@@ -27,6 +27,8 @@ namespace KartongDX.Engine
 
         public Input()
         {
+            Acessor = new InputAcessor(this);
+
             directInput = new DirectInput();
             keyboard = new Keyboard(directInput);
             mouse = new Mouse(directInput);
@@ -36,8 +38,6 @@ namespace KartongDX.Engine
 
             mouse.Properties.BufferSize = 16;
             mouse.Acquire();
-
-            instance = this;
         }
 
         public void Update()
@@ -75,40 +75,55 @@ namespace KartongDX.Engine
             //Logger.Write(LogType.Debug, string.Format("X {0} Y {1}", x_offset, y_offset));
         }
 
-        public bool GetKey(Key key)
+        /* A Class that can be passed down to States and Components to access
+         * Specific methods from the Input class.
+         */
+        public class InputAcessor
         {
-            return currentKeys[(int)key];
-        }
+            private Input input;
 
-        public bool GetKeyPressed(Key key)
-        {
-            return !prevKeys[(int)key] && currentKeys[(int)key];
-        }
+            public InputAcessor(Input input)
+            {
+                this.input = input;
+            }
 
-        public bool GetKeyReleased(Key key)
-        {
-            return prevKeys[(int)key] && !currentKeys[(int)key];
-        }
+            public bool GetKey(Key key)
+            {
+                return input.currentKeys[(int)key];
+            }
 
-        public bool GetMouseButton(MouseOffset mouse)
-        {
-            return currentMouseButtons[(int)mouse];
-        }
+            public bool GetKeyPressed(Key key)
+            {
+                return !input.prevKeys[(int)key] && input.currentKeys[(int)key];
+            }
+
+            public bool GetKeyReleased(Key key)
+            {
+                return input.prevKeys[(int)key] && !input.currentKeys[(int)key];
+            }
+
+            public bool GetMouseButton(MouseOffset mouse)
+            {
+                return input.currentMouseButtons[(int)mouse];
+            }
 
 
-        public bool GetMouseButtonPressed(MouseOffset mouse)
-        {
-            return !prevMouseButtons[(int)mouse] && currentMouseButtons[(int)mouse];
-        }
+            public bool GetMouseButtonPressed(MouseOffset mouse)
+            {
+                return !input.prevMouseButtons[(int)mouse] && input.currentMouseButtons[(int)mouse];
+            }
 
-        public bool GetMouseButtonReleased(MouseOffset mouse)
-        {
-            return prevMouseButtons[(int)mouse] && !currentMouseButtons[(int)mouse];
-        }
+            public bool GetMouseButtonReleased(MouseOffset mouse)
+            {
+                return input.prevMouseButtons[(int)mouse] && !input.currentMouseButtons[(int)mouse];
+            }
 
-        public SharpDX.Vector2 GetMouseOffset()
-        {
-            return new SharpDX.Vector2(x_offset, y_offset);
+            public SharpDX.Vector2 GetMouseOffset()
+            {
+                return new SharpDX.Vector2(input.x_offset, input.y_offset);
+            }
+
+
         }
     }
 }

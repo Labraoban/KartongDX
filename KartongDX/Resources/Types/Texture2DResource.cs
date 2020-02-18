@@ -10,15 +10,15 @@ using SharpDX;
 
 namespace KartongDX.Resources.Types
 {
-	class Texture2DResourceDescription : ResourceDescription
+	class Texture2DResourceDesc : ResourceDesc
 	{
 		public D3D11.Device Device { get; set; }
         public bool CreateSRVT { get; set; }
 
-		public Texture2DResourceDescription()
+		public Texture2DResourceDesc()
 			: base() { }
 
-		public Texture2DResourceDescription(string FileName, string Alias, D3D11.Device device, bool createSRVT = true)
+		public Texture2DResourceDesc(string FileName, string Alias, D3D11.Device device, bool createSRVT = true)
 			: base(FileName, Alias)
 		{
 			Device = device;
@@ -28,7 +28,7 @@ namespace KartongDX.Resources.Types
 
 	class Texture2DResource : Resource
 	{
-		public Texture2DResource(Texture2DResourceDescription resourceDescription)
+		public Texture2DResource(Texture2DResourceDesc resourceDescription)
 			: base(resourceDescription)
 		{ }
 
@@ -43,9 +43,9 @@ namespace KartongDX.Resources.Types
 			PrintDisposeLog();
 		}
 
-		protected override void Load(ResourceDescription resourceDescription)
+		protected override void Load(ResourceDesc resourceDescription)
 		{
-			Texture2DResourceDescription desc = (Texture2DResourceDescription)resourceDescription;
+			Texture2DResourceDesc desc = (Texture2DResourceDesc)resourceDescription;
 
 			var texture2D = CommonDX.TextureLoader.CreateTexture2DFromBitmap(desc.Device, CommonDX.TextureLoader.LoadBitmap(new SharpDX.WIC.ImagingFactory2(), desc.FileName));
 			Width = texture2D.Description.Width;

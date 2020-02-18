@@ -17,7 +17,11 @@ namespace KartongDX
 		[STAThread]
 		static void Main(string[] args)
 		{
-            Engine.Game game = new Engine.Game();
+            //Resources.Utility.HDRFileLoader.LoadHDRFile("data/textures/studio_small_05_4k.hdr");
+            //Resources.Utility.HDRFileLoader.LoadHDRFile("data/textures/hdrtest.hdr");
+
+
+            Engine.GameEngine game = new Engine.GameEngine();
 			game.Run();
 			game.Dispose();
 

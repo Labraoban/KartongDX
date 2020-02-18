@@ -17,14 +17,14 @@ namespace KartongDX.Engine
         public ComponentSystem._ModelComponent ModelComponent { get; set; }
         public ComponentSystem.Components Components { get; set; }
 
-        public GameObject()
+        private GameObject()
 			: base()
 		{
             Components = new ComponentSystem.Components(this);
 		}
 
         public GameObject(string name, int id)
-            : base()
+            : this()
         {
             Name = name;
             Id = id;

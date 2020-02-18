@@ -25,31 +25,30 @@ namespace KartongDX.Rendering
 
     class Cubemap
     {
-        public Texture Enviroment;
-        public Texture Irradiance;
-        public Texture Radiance;
-        public Texture BRDF;
+        public Texture Enviroment { get; set; }
+        public Texture Irradiance { get; set; }
+        public Texture Radiance { get; set; }
+        public Texture BRDF { get; set; }
     }
 
     class CubemapRenderer
     {
         D3D11.Device device;
 
-        private Model model;
         private Mesh cubeMesh;
-        D3D11.Buffer perFaceBuffer;
-        Format format = Format.B8G8R8A8_UNorm;
+        private D3D11.Buffer perFaceBuffer;
+        private Format format = Format.B8G8R8A8_UNorm;
 
-        Shader shaderEnv;// = resourceManager.Shaders.GetFromAlias("KDX_SKYBOX_ENV_RENDERER").Shader;
-        Shader shaderIrr;// = resourceManager.Shaders.GetFromAlias("KDX_SKYBOX_IRR_RENDERER").Shader;
+        Shader shaderEnv;
+        Shader shaderIrr;
 
-        Matrix[] Views = new Matrix[] {
-                Matrix.LookAtLH(new Vector3(0.0f, 0.0f, 0.0f), Vector3.Left, Vector3.Up),
-                Matrix.LookAtLH(new Vector3(0.0f, 0.0f, 0.0f), Vector3.Right, Vector3.Up),
-                Matrix.LookAtLH(new Vector3(0.0f, 0.0f, 0.0f), Vector3.Up, Vector3.ForwardLH),
-                Matrix.LookAtLH(new Vector3(0.0f, 0.0f, 0.0f), Vector3.Down, Vector3.BackwardLH),
-                Matrix.LookAtLH(new Vector3(0.0f, 0.0f, 0.0f), Vector3.BackwardLH, Vector3.Up),
-                Matrix.LookAtLH(new Vector3(0.0f, 0.0f, 0.0f), Vector3.ForwardLH, Vector3.Up)
+        Matrix[] views = new Matrix[] {
+                Matrix.LookAtLH(new Vector3(0.0f, 0.0f, 0.0f), Vector3.Right, Vector3.Down),
+                Matrix.LookAtLH(new Vector3(0.0f, 0.0f, 0.0f), Vector3.Left, Vector3.Down),
+                Matrix.LookAtLH(new Vector3(0.0f, 0.0f, 0.0f), Vector3.Down, Vector3.ForwardLH),
+                Matrix.LookAtLH(new Vector3(0.0f, 0.0f, 0.0f), Vector3.Up, Vector3.BackwardLH),
+                Matrix.LookAtLH(new Vector3(0.0f, 0.0f, 0.0f), Vector3.BackwardLH, Vector3.Down),
+                Matrix.LookAtLH(new Vector3(0.0f, 0.0f, 0.0f), Vector3.ForwardLH, Vector3.Down)
         };
 
         public CubemapRenderer(D3D11.Device device, Resources.ResourceManager resourceManager)
@@ -59,6 +58,7 @@ namespace KartongDX.Rendering
             shaderEnv = resourceManager.Shaders.GetFromAlias("KDX_SKYBOX_ENV_RENDERER").Shader;
             shaderIrr = resourceManager.Shaders.GetFromAlias("KDX_SKYBOX_IRR_RENDERER").Shader;
 
+
             cubeMesh = resourceManager.Meshes.GetFromAlias("KDX_CUBE_IN").Mesh;
 
             if (!cubeMesh.HasBuffers)
@@ -67,12 +67,12 @@ namespace KartongDX.Rendering
 
         public Cubemap GenerateFromEquirectangular(D3D11.Texture2D equirectangular)
         {
-            Logger.Write(LogType.Info, "Generating Cubemaps...");
+            Logger.Write(LogType.Info, "Generating Cubemaps");
 
             Cubemap cubemap = new Cubemap();
 
             var enviroment = GenerateCubemap(device, shaderEnv, 1024, equirectangular, 1, 0);
-            var irradiance = GenerateCubemap(device, shaderIrr, 64, equirectangular, 1, 0);
+            var irradiance = GenerateCubemap(device, shaderIrr, 128, equirectangular, 1, 0);
 
             var enviromentSRTV = CreateShaderResourceView(device, format, enviroment);
             var irradianceSRVT = CreateShaderResourceView(device, format, irradiance);
@@ -83,11 +83,11 @@ namespace KartongDX.Rendering
             return cubemap;
         }
 
-        public D3D11.Texture2D GenerateCubemap(D3D11.Device device, Shader shader, int width, D3D11.Texture2D texture, int mipLevels, int mip)
+        public D3D11.Texture2D GenerateCubemap(D3D11.Device device, Shader shader, int size, D3D11.Texture2D texture, int mipLevels, int mip)
         {
             Format format = Format.B8G8R8A8_UNorm;
 
-            D3D11.Texture2DDescription renderTextureDesc = GetTexture2DDescription(width, format, mipLevels);
+            D3D11.Texture2DDescription renderTextureDesc = GetTexture2DDescription(size, format, mipLevels);
 
             D3D11.SamplerState sampler = GetSamplerState(device);
 
@@ -102,20 +102,20 @@ namespace KartongDX.Rendering
                 D3D11.ResourceOptionFlags.None, 0);
 
 
-            D3D11.DeviceContext deviceContext = device.ImmediateContext;
+            //D3D11.DeviceContext deviceContext = device.ImmediateContext;
 
-            SetupContext(device, width, shader, sampler, texture);
+            SetupContext(device, size, shader, sampler, texture);
             Render(device, skyRTVs);
 
 
             return RenderTexture;
         }
 
-        private void SetupContext(D3D11.Device device, int width, Shader shader, D3D11.SamplerState sampler, D3D11.Texture2D texture)
+        private void SetupContext(D3D11.Device device, int size, Shader shader, D3D11.SamplerState sampler, D3D11.Texture2D texture)
         {
             D3D11.DeviceContext deviceContext = device.ImmediateContext;
 
-            deviceContext.Rasterizer.SetViewport(new Viewport(0, 0, width, width));
+            deviceContext.Rasterizer.SetViewport(new Viewport(0, 0, size, size));
 
             deviceContext.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
             deviceContext.InputAssembler.InputLayout = shader.InputLayout;
@@ -141,9 +141,11 @@ namespace KartongDX.Rendering
                 deviceContext.OutputMerger.SetRenderTargets(rtvs[i]);
                 deviceContext.ClearRenderTargetView(rtvs[i], Color.Red);
 
+                //if (i == 5)
+                //    continue;
                 KDX_SKYBOX_ENV_RENDERER_BUFFER buffer = new KDX_SKYBOX_ENV_RENDERER_BUFFER();
                 buffer.World = Matrix.Transpose(Matrix.Identity);
-                buffer.View = Matrix.Transpose(Views[i]);
+                buffer.View = Matrix.Transpose(views[i]);
                 buffer.Proj = Matrix.Transpose(Matrix.PerspectiveFovLH(MathUtil.DegreesToRadians(90), 1, 0.01f, 100.0f));
                 buffer.MVP = (buffer.Proj * buffer.View * buffer.World);
 

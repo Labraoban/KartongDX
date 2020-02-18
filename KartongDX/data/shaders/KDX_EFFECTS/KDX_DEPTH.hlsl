@@ -32,6 +32,8 @@ float4 ps_main(VS_Output input) : SV_TARGET
 	float4 viewCoords = mul(InvProj, ndcCoords);
 	float linearDepth = (viewCoords.z / viewCoords.w);
 
+	//return float4(color, 1.0f);
+
 	//float zw = depth;
 	//float linearDepth = Proj._43 / (zw - Proj._33);
 	//linearDepth = 1.0f - depth;

@@ -8,13 +8,17 @@ namespace KartongDX.Engine.States
 {
     class GameStateMachine
     {
+
         public Dictionary<string, GameState> gameStates;
         public List<GameState> stateStack;
 
-        public GameStateMachine()
+        private Accessors accessors;
+
+        public GameStateMachine(Accessors accessors)
         {
             gameStates = new Dictionary<string, GameState>();
             stateStack = new List<GameState>();
+            this.accessors = accessors;
         }
 
         public void Attach(GameState gameState)
@@ -35,11 +39,11 @@ namespace KartongDX.Engine.States
             stateStack.Add(state);
         }
 
-        public void Update(GameTime gameTime)
+        public void Update()
         {
             foreach(GameState state in stateStack)
             {
-                state.Update(gameTime);
+                state.Update();
             }
         }
 

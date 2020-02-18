@@ -12,13 +12,13 @@ namespace KartongDX.Rendering
 	class Window : IDisposable
 	{
 		private RenderForm renderForm;
-		public int Width { get; private set; }
-		public int Height { get; private set; }
+		public static int Width { get; private set; }
+		public static int Height { get; private set; }
 
 		public Window(string title, int width, int height, bool resizeable)
 		{
-			this.Width = width;
-			this.Height = height;
+			Width = width;
+			Height = height;
 
 			renderForm = new RenderForm(title);
 			renderForm.ClientSize = new Size(width, height);
